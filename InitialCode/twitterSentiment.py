@@ -60,9 +60,25 @@ class TwitterClient(object):
         tweets = []
  
         try:
-            # call twitter api to fetch tweets
-            fetched_tweets = self.api.search(q = query, count = count)
- 
+            max_tweets = 5000
+            fetched_tweets = []
+            last_id = -1
+            while len(fetched_tweets) < max_tweets:
+                count = max_tweets - len(fetched_tweets)
+                try:
+                    # call twitter api to fetch tweets
+                    new_tweets = self.api.search(q=query, count=count, max_id=str(last_id - 1))
+                    if not new_tweets:
+                        break
+                    fetched_tweets.extend(new_tweets)
+                    last_id = new_tweets[-1].id
+                except tweepy.TweepError as e:
+                    # depending on TweepError.code, one may want to retry or wait
+                    # to keep things simple, we will give up on an error
+                    break
+
+            #print("len fetched: " + str(len(fetched_tweets)))
+            
             # parsing tweets one by one
             for tweet in fetched_tweets:
                 # empty dictionary to store required params of a tweet
@@ -72,7 +88,6 @@ class TwitterClient(object):
                 parsed_tweet['text'] = tweet.text
                 # saving sentiment of tweet
                 parsed_tweet['sentiment'] = self.get_tweet_sentiment(tweet.text)
- 
                 # appending parsed tweet to tweets list
                 if tweet.retweet_count > 0:
                     # if tweet has retweets, ensure that it is appended only once
