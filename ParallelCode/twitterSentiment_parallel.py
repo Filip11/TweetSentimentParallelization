@@ -96,8 +96,8 @@ class TwitterClient(object):
             last_id = -1
             while len(fetched_tweets) < max_tweets:
                 # call twitter api to fetch tweets
-                new_tweets = self.api.search(q=query, count=count, max_id=str(last_id - 1))
-                time.sleep(1)
+                new_tweets = self.api.search(q=query, count=count, max_id=str(last_id))
+                #time.sleep(1)
                 if not new_tweets:
                     break
 
@@ -130,7 +130,7 @@ def addline(aLine):
 
 def worker(core, fetched_tweets, output):
     #set process to use specific core, does not work on Windows
-    #os.sched_setaffinity(0, {core})
+    os.sched_setaffinity(0, {core})
     TwitterClient().parse_tweets(fetched_tweets, output)
     print("process: " + str(core) + " done")
 
@@ -140,23 +140,27 @@ def main():
     fetched_tweets = None
     numPtweets = 0
     numNtweets = 0
-    max_tweets = 100
+    max_tweets = 1000
     num_processes = 4
 
     use_saved_tweets = False
-    save_tweets = True
+    save_tweets = False
     tweet_file = "tweets.txt"
 
     # calling function to get tweets
     if use_saved_tweets:
             with open(tweet_file, 'r') as f:
                 fetched_tweets = list(f.read())
-        elif save_tweets:
-            # creating object of TwitterClient Class
-            api = TwitterClient()
-            fetched_tweets = api.get_tweets(query = 'Engineer', max_tweets = max_tweets)
-            with open(tweet_file, 'w') as f:
-                f.write(str(str(fetched_tweets).encode("utf-8")))
+    elif save_tweets:
+        # creating object of TwitterClient Class
+        api = TwitterClient()
+        fetched_tweets = api.get_tweets(query = 'Engineer', max_tweets = max_tweets)
+        with open(tweet_file, 'w') as f:
+            f.write(str(str(fetched_tweets).encode("utf-8")))
+    else:
+        api = TwitterClient()
+        fetched_tweets = api.get_tweets(query = 'Engineer', max_tweets = max_tweets)
+    print("done fetching")
 
     if fetched_tweets:
 
@@ -221,8 +225,8 @@ def main():
         addline("Negative tweets percentage: {}".format(100*numNtweets/len(tweets)))
 
     addline("========================================================================")
-    for tweet in tweets:
-        addline(tweet['text'])
+    #for tweet in tweets:
+    #    addline(tweet['text'])
     addline("========================================================================")
     global respMain
     genRank = respMain
