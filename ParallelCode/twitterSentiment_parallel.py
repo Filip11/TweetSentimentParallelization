@@ -3,6 +3,10 @@ import tweepy
 from tweepy import OAuthHandler
 from textblob import TextBlob
 from flask import Flask
+import multiprocessing as mp
+import time
+import os
+
 app = Flask(__name__)
  
 class TwitterClient(object):
@@ -55,7 +59,8 @@ class TwitterClient(object):
     ###############################################################################################
     # parse_tweets can be the "worker" method for the processes
     ###############################################################################################
-    def parse_tweets(self, fetched_tweets):
+    def parse_tweets(self, fetched_tweets, output):
+        print("parse_tweets")
         tweets = []
         numPtweets = 0
         numNtweets = 0
@@ -76,22 +81,23 @@ class TwitterClient(object):
 
             tweets.append(parsed_tweet)
 
-        print(numPtweets)
-        return tweets, numPtweets, numNtweets
+        #return tweets, numPtweets, numNtweets
+        output.put({"tweets" : tweets})
+        output.put({"numPtweets" : numPtweets})
+        output.put({"numNtweets" : numNtweets})
 
-    def get_tweets(self, query, count):
+    def get_tweets(self, query, max_tweets):
         '''
-        Main function to fetch tweets and parse them.
+        Main function to fetch tweets.
         '''
- 
+        count = 100
         try:
-            max_tweets = 1000
             fetched_tweets = []
             last_id = -1
             while len(fetched_tweets) < max_tweets:
-                count = max_tweets - len(fetched_tweets)
                 # call twitter api to fetch tweets
                 new_tweets = self.api.search(q=query, count=count, max_id=str(last_id - 1))
+                time.sleep(1)
                 if not new_tweets:
                     break
 
@@ -101,34 +107,118 @@ class TwitterClient(object):
                         new_tweets.remove(tweet)
 
                 fetched_tweets.extend(new_tweets)
-                last_id = new_tweets[-1].id
+                print("fetched " + str(len(fetched_tweets)))
+                if len(new_tweets) > 0:
+                    last_id = new_tweets[-1].id
  
-            # return parsed tweets, number of posistive and negative tweets
-            tweets, numPtweets, numNtweets = self.parse_tweets(fetched_tweets)
-            return tweets, numPtweets, numNtweets
+            return fetched_tweets
  
         except tweepy.TweepError as e:
             # print error (if any)
             print("Error : " + str(e))
+
+##############################################
+# End of TwitterClient
+##############################################
+
 
 respMain=""
 def addline(aLine):
     global respMain
     respMain=respMain+"\r\n<br />"+aLine
     return
- 
+
+def worker(core, fetched_tweets, output):
+    #set process to use specific core, does not work on Windows
+    #os.sched_setaffinity(0, {core})
+    TwitterClient().parse_tweets(fetched_tweets, output)
+    print("process: " + str(core) + " done")
+
 def main():
-    # creating object of TwitterClient Class
-    api = TwitterClient()
+
+    tweets = []
+    fetched_tweets = None
+    numPtweets = 0
+    numNtweets = 0
+    max_tweets = 100
+    num_processes = 4
+
+    use_saved_tweets = False
+    save_tweets = True
+    tweet_file = "tweets.txt"
+
     # calling function to get tweets
-    tweets, numPtweets, numNtweets = api.get_tweets(query = 'Engineer', count = 5000)
+    if use_saved_tweets:
+            with open(tweet_file, 'r') as f:
+                fetched_tweets = list(f.read())
+        elif save_tweets:
+            # creating object of TwitterClient Class
+            api = TwitterClient()
+            fetched_tweets = api.get_tweets(query = 'Engineer', max_tweets = max_tweets)
+            with open(tweet_file, 'w') as f:
+                f.write(str(str(fetched_tweets).encode("utf-8")))
+
+    if fetched_tweets:
+
+        if len(fetched_tweets) > max_tweets:
+            fetched_tweets = fetched_tweets[:max_tweets-1]
+
+        # Define an output queue
+        output = mp.Queue()
+
+        # number of tweets per process
+        tweets_per_process = len(fetched_tweets)/num_processes
+        print("tweets per process " + str(tweets_per_process))
+
+        # Setup a list of processes
+        processes = []
+        for x in range(num_processes):
+            lower_limit = int(x*tweets_per_process)
+            upper_limit = int(((x+1)*tweets_per_process) - 1)
+            #print("limit " + str(lower_limit) + "," + str(upper_limit))
+            if x == num_processes-1:
+                tweets_subset = fetched_tweets[lower_limit:]
+            else:
+                tweets_subset = fetched_tweets[lower_limit:upper_limit]
+            processes.append(mp.Process(target=worker, args=(x, tweets_subset, output)))
+
+        #start timer
+        start = time.time()
+
+        # Run processes
+        for p in processes:
+            p.start()
+
+        # Exit the completed processes
+        for p in processes:
+            print("joining")
+            p.join()
+
+        #end time
+        end = time.time()
+        print(end - start)
+
+    # Get process results from the output queue
+        while not output.empty():
+            item = output.get()
+            if "tweets" in item:
+                tweets.extend(item["tweets"])
+            elif "numPtweets" in item:
+                numPtweets += item["numPtweets"]
+            elif "numNtweets" in item:
+                numNtweets += item["numNtweets"]
+
+    # parse tweets, and get number of positive and negative tweets
+    # tweets, numPtweets, numNtweets = api.parse_tweets(fetched_tweets)
+
     addline("total "+str(len(tweets)))
     # percentage of positive tweets
-    addline("positive "+str(float(numPtweets)/float(len(tweets))))    
-    addline("Positive tweets percentage: {}".format(100*numPtweets/len(tweets)))
-    # percentage of negative tweets
-    addline("negative "+str(float(numNtweets)/float(len(tweets))))    
-    addline("Negative tweets percentage: {}".format(100*numNtweets/len(tweets)))
+    if len(tweets) > 0:
+        addline("positive "+str(float(numPtweets)/float(len(tweets))))    
+        addline("Positive tweets percentage: {}".format(100*numPtweets/len(tweets)))
+        # percentage of negative tweets
+        addline("negative "+str(float(numNtweets)/float(len(tweets))))    
+        addline("Negative tweets percentage: {}".format(100*numNtweets/len(tweets)))
 
     addline("========================================================================")
     for tweet in tweets:
