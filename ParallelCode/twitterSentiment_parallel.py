@@ -6,6 +6,7 @@ from flask import Flask
 import multiprocessing as mp
 import time
 import os
+import pickle
 
 app = Flask(__name__)
  
@@ -140,26 +141,27 @@ def main():
     fetched_tweets = None
     numPtweets = 0
     numNtweets = 0
-    max_tweets = 1000
+    max_tweets = 5000
     num_processes = 4
 
     use_saved_tweets = False
-    save_tweets = False
+    save_tweets = True
     tweet_file = "tweets.txt"
 
     # calling function to get tweets
     if use_saved_tweets:
-            with open(tweet_file, 'r') as f:
-                fetched_tweets = list(f.read())
+            with open(tweet_file, 'rb') as f:
+                fetched_tweets = pickle.load(f)
     elif save_tweets:
         # creating object of TwitterClient Class
         api = TwitterClient()
         fetched_tweets = api.get_tweets(query = 'Engineer', max_tweets = max_tweets)
-        with open(tweet_file, 'w') as f:
-            f.write(str(str(fetched_tweets).encode("utf-8")))
+        with open(tweet_file, 'wb') as f:
+            pickle.dump(fetched_tweets,f)
     else:
         api = TwitterClient()
         fetched_tweets = api.get_tweets(query = 'Engineer', max_tweets = max_tweets)
+        print(type(fetched_tweets[0]))
     print("done fetching")
 
     if fetched_tweets:
@@ -193,16 +195,7 @@ def main():
         for p in processes:
             p.start()
 
-        # Exit the completed processes
-        for p in processes:
-            print("joining")
-            p.join()
-
-        #end time
-        end = time.time()
-        print(end - start)
-
-    # Get process results from the output queue
+        # Get process results from the output queue
         while not output.empty():
             item = output.get()
             if "tweets" in item:
@@ -211,6 +204,15 @@ def main():
                 numPtweets += item["numPtweets"]
             elif "numNtweets" in item:
                 numNtweets += item["numNtweets"]
+
+        # Exit the completed processes
+        for p in processes:
+            print("joining")
+            p.join()
+
+        #end time
+        end = time.time()
+        print(end - start)
 
     # parse tweets, and get number of positive and negative tweets
     # tweets, numPtweets, numNtweets = api.parse_tweets(fetched_tweets)
