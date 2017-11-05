@@ -83,9 +83,14 @@ class TwitterClient(object):
             tweets.append(parsed_tweet)
 
         #return tweets, numPtweets, numNtweets
-        output.put({"tweets" : tweets})
+        temp_results = []
+        temp_results.append({"tweets" : tweets})
+        temp_results.append({"numPtweets" : numPtweets})
+        temp_results.append({"numNtweets" : numNtweets})
+        output.send(temp_results)
+        '''output.put({"tweets" : tweets})
         output.put({"numPtweets" : numPtweets})
-        output.put({"numNtweets" : numNtweets})
+        output.put({"numNtweets" : numNtweets})'''
 
     def get_tweets(self, query, max_tweets):
         '''
@@ -129,19 +134,23 @@ def addline(aLine):
     respMain=respMain+"\r\n<br />"+aLine
     return
 
+###########################################
+# worker method for processes to parse tweets
+###########################################
 def worker(core, fetched_tweets, output):
     #set process to use specific core, does not work on Windows
-    os.sched_setaffinity(0, {core})
+    #os.sched_setaffinity(0, {core})
     TwitterClient().parse_tweets(fetched_tweets, output)
     print("process: " + str(core) + " done")
 
 def main():
 
     tweets = []
+    results = []
     fetched_tweets = None
     numPtweets = 0
     numNtweets = 0
-    max_tweets = 5000
+    max_tweets = 100
     num_processes = 4
 
     use_saved_tweets = False
@@ -169,8 +178,8 @@ def main():
         if len(fetched_tweets) > max_tweets:
             fetched_tweets = fetched_tweets[:max_tweets-1]
 
-        # Define an output queue
-        output = mp.Queue()
+        # Define pipe to send data from parent and cild processes
+        parent_recv, child_send = mp.Pipe()
 
         # number of tweets per process
         tweets_per_process = len(fetched_tweets)/num_processes
@@ -186,7 +195,7 @@ def main():
                 tweets_subset = fetched_tweets[lower_limit:]
             else:
                 tweets_subset = fetched_tweets[lower_limit:upper_limit]
-            processes.append(mp.Process(target=worker, args=(x, tweets_subset, output)))
+            processes.append(mp.Process(target=worker, args=(x, tweets_subset, child_send)))
 
         #start timer
         start = time.time()
@@ -195,15 +204,9 @@ def main():
         for p in processes:
             p.start()
 
-        # Get process results from the output queue
-        while not output.empty():
-            item = output.get()
-            if "tweets" in item:
-                tweets.extend(item["tweets"])
-            elif "numPtweets" in item:
-                numPtweets += item["numPtweets"]
-            elif "numNtweets" in item:
-                numNtweets += item["numNtweets"]
+        # Get process results from output pipe
+        for i in range(num_processes):
+            results.extend(parent_recv.recv())
 
         # Exit the completed processes
         for p in processes:
@@ -213,6 +216,15 @@ def main():
         #end time
         end = time.time()
         print(end - start)
+
+    #get number of positive and negative tweets
+    for item in results:
+        if "tweets" in item:
+            tweets.extend(item["tweets"])
+        elif "numPtweets" in item:
+            numPtweets += item["numPtweets"]
+        elif "numNtweets" in item:
+            numNtweets += item["numNtweets"]
 
     # parse tweets, and get number of positive and negative tweets
     # tweets, numPtweets, numNtweets = api.parse_tweets(fetched_tweets)
