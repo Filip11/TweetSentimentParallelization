@@ -140,7 +140,8 @@ def addline(aLine):
 def worker(core, tweet_limit, fetched_tweets, output):
     #set process to use specific core, does not work on Windows
     os.sched_setaffinity(0, {core})
-
+    if not fetched_tweets:
+        fetched_tweets = []
     if len(fetched_tweets) <= 0:
         query = 'Engineer'
         date = datetime.now() - timedelta(days=(core*2))
