@@ -150,8 +150,10 @@ def worker(core, tweet_limit, fetched_tweets, output):
         fetched_tweets = TwitterClient().get_tweets(query, tweet_limit, date)
     if len(fetched_tweets) > tweet_limit:
         fetched_tweets = fetched_tweets[:int(tweet_limit)]
+    start = time.time()
     TwitterClient().parse_tweets(fetched_tweets, output)
-    print("process: " + str(core) + " done")
+    end = time.time()
+    print("processing " + str(core) + ": " + str(end-start))
 
 # starts the processes and times them
 def run_processes(processes, parent_recv):
@@ -175,7 +177,7 @@ def run_processes(processes, parent_recv):
 
     #end time
     end = time.time()
-    print('processing time: ' + str(end - start))
+    print('total processing time: ' + str(end - start))
 
     return results
 
