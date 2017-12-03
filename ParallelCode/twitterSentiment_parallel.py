@@ -233,6 +233,7 @@ def main():
 
     # get all of the tweets before processing
     if not parallel_get_tweets:
+        fetch_start_timer = time.time()
         if use_saved_tweets:
                 with open(tweet_file, 'rb') as f:
                     fetched_tweets = pickle.load(f)
@@ -245,6 +246,9 @@ def main():
             api = TwitterClient()
             fetched_tweets = api.get_tweets(query = query, max_tweets = max_tweets)
             # print("done fetching")
+
+        fetch_end_timer = time.time()
+        print("Total fetching: " + str(fetch_end_timer - fetch_start_timer))
 
         #process the pre fetched tweets from saved or query
         if fetched_tweets:
