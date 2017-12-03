@@ -175,7 +175,7 @@ def run_processes(processes, parent_recv):
 
     #end time
     end = time.time()
-    print('processing time: ' + (end - start))
+    print('processing time: ' + str(end - start))
 
     return results
 
@@ -290,7 +290,7 @@ def main():
 
     #end total application timer
     end_app_timer = time.time()
-    print('total time: ' + (end_app_timer - start_app_timer))
+    print('total time: ' + str(end_app_timer - start_app_timer))
 
     global respMain
     genRank = respMain
@@ -300,7 +300,7 @@ def main():
 @app.route('/')
 def hello_world():
     return main()
-    
+
 if __name__ == "__main__":
     # calling main function
     app.run(host='0.0.0.0', port=3333)
