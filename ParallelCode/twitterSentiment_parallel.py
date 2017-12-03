@@ -7,6 +7,7 @@ import multiprocessing as mp
 import time
 import os
 import pickle
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
  
@@ -61,7 +62,7 @@ class TwitterClient(object):
     # parse_tweets can be the "worker" method for the processes
     ###############################################################################################
     def parse_tweets(self, fetched_tweets, output):
-        print("parse_tweets")
+        # print("parse_tweets")
         tweets = []
         numPtweets = 0
         numNtweets = 0
@@ -92,7 +93,7 @@ class TwitterClient(object):
         output.put({"numPtweets" : numPtweets})
         output.put({"numNtweets" : numNtweets})'''
 
-    def get_tweets(self, query, max_tweets):
+    def get_tweets(self, query, max_tweets, date = None):
         '''
         Main function to fetch tweets.
         '''
@@ -102,7 +103,7 @@ class TwitterClient(object):
             last_id = -1
             while len(fetched_tweets) < max_tweets:
                 # call twitter api to fetch tweets
-                new_tweets = self.api.search(q=query, count=count, max_id=str(last_id))
+                new_tweets = self.api.search(q=query, count=count, max_id=str(last_id), until=date)
                 #time.sleep(1)
                 if not new_tweets:
                     break
@@ -113,14 +114,13 @@ class TwitterClient(object):
                         new_tweets.remove(tweet)
 
                 fetched_tweets.extend(new_tweets)
-                print("fetched " + str(len(fetched_tweets)))
+                # print("fetched " + str(len(fetched_tweets)))
                 if len(new_tweets) > 0:
                     last_id = new_tweets[-1].id
  
             return fetched_tweets
  
         except tweepy.TweepError as e:
-            # print error (if any)
             print("Error : " + str(e))
 
 ##############################################
@@ -135,88 +135,52 @@ def addline(aLine):
     return
 
 ###########################################
-# worker method for processes to parse tweets
+# worker method for processes to get/parse tweets
 ###########################################
-def worker(core, fetched_tweets, output):
+def worker(core, tweet_limit, fetched_tweets, output):
     #set process to use specific core, does not work on Windows
-    #os.sched_setaffinity(0, {core})
+    os.sched_setaffinity(0, {core})
+
+    if len(fetched_tweets) <= 0:
+        query = 'Engineer'
+        date = datetime.now() - timedelta(days=(core*2))
+        date = date.strftime("%Y-%m-%d")
+        #print("date: " + date)
+        fetched_tweets = TwitterClient().get_tweets(query, tweet_limit, date)
+    if len(fetched_tweets) > tweet_limit:
+        fetched_tweets = fetched_tweets[:int(tweet_limit)]
     TwitterClient().parse_tweets(fetched_tweets, output)
     print("process: " + str(core) + " done")
 
-def main():
+# starts the processes and times them
+def run_processes(processes, parent_recv):
 
-    tweets = []
     results = []
-    fetched_tweets = None
-    numPtweets = 0
-    numNtweets = 0
-    max_tweets = 100
-    num_processes = 4
+    #start timer
+    start = time.time()
 
-    use_saved_tweets = False
-    save_tweets = True
-    tweet_file = "tweets.txt"
+    # Run processes
+    for p in processes:
+        p.start()
 
-    # calling function to get tweets
-    if use_saved_tweets:
-            with open(tweet_file, 'rb') as f:
-                fetched_tweets = pickle.load(f)
-    elif save_tweets:
-        # creating object of TwitterClient Class
-        api = TwitterClient()
-        fetched_tweets = api.get_tweets(query = 'Engineer', max_tweets = max_tweets)
-        with open(tweet_file, 'wb') as f:
-            pickle.dump(fetched_tweets,f)
-    else:
-        api = TwitterClient()
-        fetched_tweets = api.get_tweets(query = 'Engineer', max_tweets = max_tweets)
-        print(type(fetched_tweets[0]))
-    print("done fetching")
+    # Get process results from output pipe
+    for i in range(len(processes)):
+        results.extend(parent_recv.recv())
 
-    if fetched_tweets:
+    # Exit the completed processes
+    for p in processes:
+        # print("joining")
+        p.join()
 
-        if len(fetched_tweets) > max_tweets:
-            fetched_tweets = fetched_tweets[:max_tweets-1]
+    #end time
+    end = time.time()
+    print(end - start)
 
-        # Define pipe to send data from parent and cild processes
-        parent_recv, child_send = mp.Pipe()
+    return results
 
-        # number of tweets per process
-        tweets_per_process = len(fetched_tweets)/num_processes
-        print("tweets per process " + str(tweets_per_process))
-
-        # Setup a list of processes
-        processes = []
-        for x in range(num_processes):
-            lower_limit = int(x*tweets_per_process)
-            upper_limit = int(((x+1)*tweets_per_process) - 1)
-            #print("limit " + str(lower_limit) + "," + str(upper_limit))
-            if x == num_processes-1:
-                tweets_subset = fetched_tweets[lower_limit:]
-            else:
-                tweets_subset = fetched_tweets[lower_limit:upper_limit]
-            processes.append(mp.Process(target=worker, args=(x, tweets_subset, child_send)))
-
-        #start timer
-        start = time.time()
-
-        # Run processes
-        for p in processes:
-            p.start()
-
-        # Get process results from output pipe
-        for i in range(num_processes):
-            results.extend(parent_recv.recv())
-
-        # Exit the completed processes
-        for p in processes:
-            print("joining")
-            p.join()
-
-        #end time
-        end = time.time()
-        print(end - start)
-
+# add lines of results to the webpage
+def display_results(results):
+    tweets = []
     #get number of positive and negative tweets
     for item in results:
         if "tweets" in item:
@@ -239,9 +203,86 @@ def main():
         addline("Negative tweets percentage: {}".format(100*numNtweets/len(tweets)))
 
     addline("========================================================================")
-    #for tweet in tweets:
-    #    addline(tweet['text'])
+    for tweet in tweets:
+        addline(tweet['text'])
     addline("========================================================================")
+
+def main():
+
+    results = []
+    fetched_tweets = None
+    numPtweets = 0
+    numNtweets = 0
+    max_tweets = 5000
+    num_processes = 4
+    query = 'Engineer'
+
+    use_saved_tweets = False
+    save_tweets = False
+    parallel_get_tweets = False
+    tweet_file = "tweets.txt"
+
+    # get all of the tweets before processing
+    if not parallel_get_tweets:
+        if use_saved_tweets:
+                with open(tweet_file, 'rb') as f:
+                    fetched_tweets = pickle.load(f)
+        elif save_tweets: # fetch and save tweets to text file
+            api = TwitterClient()
+            fetched_tweets = api.get_tweets(query = query, max_tweets = max_tweets)
+            with open(tweet_file, 'wb') as f:
+                pickle.dump(fetched_tweets,f)
+        else: # fetch tweets from online
+            api = TwitterClient()
+            fetched_tweets = api.get_tweets(query = query, max_tweets = max_tweets)
+            # print("done fetching")
+
+        #process the pre fetched tweets from saved or query
+        if fetched_tweets:
+
+            if len(fetched_tweets) > max_tweets:
+                fetched_tweets = fetched_tweets[:max_tweets-1]
+
+            # Define pipe to send data from parent and cild processes
+            parent_recv, child_send = mp.Pipe()
+
+            # number of tweets per process
+            tweets_per_process = len(fetched_tweets)/num_processes
+            print("tweets per process " + str(tweets_per_process))
+
+            # Setup a list of processes
+            processes = []
+            for x in range(num_processes):
+                lower_limit = int(x*tweets_per_process)
+                upper_limit = int(((x+1)*tweets_per_process) - 1)
+                #print("limit " + str(lower_limit) + "," + str(upper_limit))
+                tweets_subset = []
+                if x == num_processes-1:
+                    tweets_subset = fetched_tweets[lower_limit:]
+                else:
+                    tweets_subset = fetched_tweets[lower_limit:upper_limit]
+                processes.append(mp.Process(target=worker, args=(x, tweets_per_process, tweets_subset, child_send)))
+
+            results = run_processes(processes, parent_recv)
+
+    # get tweets in parallel processes
+    elif parallel_get_tweets:
+        # Define pipe to send data from parent and child processes
+        parent_recv, child_send = mp.Pipe()
+
+        # number of tweets per process
+        tweets_per_process = max_tweets/num_processes
+        print("tweets per process " + str(tweets_per_process))
+
+        # Setup a list of processes
+        processes = []
+        for x in range(num_processes):
+            processes.append(mp.Process(target=worker, args=(x, tweets_per_process, tweets_subset, child_send)))
+
+        results = run_processes(processes, parent_recv)
+
+    display_results(results)
+
     global respMain
     genRank = respMain
     respMain = ""
