@@ -143,11 +143,14 @@ def worker(core, tweet_limit, fetched_tweets, output):
     if not fetched_tweets:
         fetched_tweets = []
     if len(fetched_tweets) <= 0:
+        start = time.time()
         query = 'Engineer'
         date = datetime.now() - timedelta(days=(core*2))
         date = date.strftime("%Y-%m-%d")
         #print("date: " + date)
         fetched_tweets = TwitterClient().get_tweets(query, tweet_limit, date)
+        end = time.time()
+        print("fetching " + str(core) + ": " + str(end-start))
     if len(fetched_tweets) > tweet_limit:
         fetched_tweets = fetched_tweets[:int(tweet_limit)]
     start = time.time()
