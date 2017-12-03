@@ -175,7 +175,7 @@ def run_processes(processes, parent_recv):
 
     #end time
     end = time.time()
-    print(end - start)
+    print('processing time: ' + (end - start))
 
     return results
 
@@ -222,6 +222,9 @@ def main():
     save_tweets = False
     parallel_get_tweets = True
     tweet_file = "tweets.txt"
+
+    #start total application timer
+    start_app_timer = time.time()
 
     # get all of the tweets before processing
     if not parallel_get_tweets:
@@ -285,13 +288,19 @@ def main():
 
     display_results(results)
 
+    #end total application timer
+    end_app_timer = time.time()
+    print('total time: ' + (end_app_timer - start_app_timer))
+
     global respMain
     genRank = respMain
     respMain = ""
     return genRank
+
 @app.route('/')
 def hello_world():
     return main()
+    
 if __name__ == "__main__":
     # calling main function
     app.run(host='0.0.0.0', port=3333)
