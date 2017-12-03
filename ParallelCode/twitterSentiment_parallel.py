@@ -181,6 +181,8 @@ def run_processes(processes, parent_recv):
 # add lines of results to the webpage
 def display_results(results):
     tweets = []
+    numPtweets = 0
+    numNtweets = 0
     #get number of positive and negative tweets
     for item in results:
         if "tweets" in item:
@@ -211,15 +213,13 @@ def main():
 
     results = []
     fetched_tweets = None
-    numPtweets = 0
-    numNtweets = 0
     max_tweets = 5000
     num_processes = 4
     query = 'Engineer'
 
     use_saved_tweets = False
     save_tweets = False
-    parallel_get_tweets = False
+    parallel_get_tweets = True
     tweet_file = "tweets.txt"
 
     # get all of the tweets before processing
@@ -277,6 +277,7 @@ def main():
         # Setup a list of processes
         processes = []
         for x in range(num_processes):
+            tweets_subset = []
             processes.append(mp.Process(target=worker, args=(x, tweets_per_process, tweets_subset, child_send)))
 
         results = run_processes(processes, parent_recv)
