@@ -157,7 +157,7 @@ def addline(aLine):
 ###########################################
 def worker(core, tweet_limit, fetched_tweets):
     #set process to use specific core, does not work on Windows
-    #os.sched_setaffinity(0, {core})
+    os.sched_setaffinity(0, {core})
     '''
     context = zmq.Context()
     zmq_pushsocket = context.socket(zmq.PUSH)
