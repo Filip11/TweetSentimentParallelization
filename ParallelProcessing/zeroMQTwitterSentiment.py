@@ -265,7 +265,7 @@ def main():
 
     use_saved_tweets = False
     save_tweets = False
-    parallel_get_tweets = False
+    parallel_get_tweets = True
     tweet_file = "tweets.txt"
 
     #start total application timer
@@ -331,7 +331,12 @@ def main():
     # get tweets in parallel processes
     elif parallel_get_tweets:
         # Define pipe to send data from parent and child processes
-        parent_recv, child_send = mp.Pipe()
+        context = zmq.Context()
+        zmq_pullsocket1 = context.socket(zmq.PULL)
+        zmq_pullsocket1.bind("tcp://0.0.0.0:5557")
+        zmq_pullsocket1.bind("tcp://0.0.0.0:5558")
+        zmq_pullsocket1.bind("tcp://0.0.0.0:5559")
+        zmq_pullsocket1.bind("tcp://0.0.0.0:5560")
 
         # number of tweets per process
         tweets_per_process = max_tweets/num_processes
@@ -341,11 +346,11 @@ def main():
         processes = []
         for x in range(num_processes):
             tweets_subset = []
-            processes.append(mp.Process(target=worker, args=(x, tweets_per_process, tweets_subset, child_send)))
+            processes.append(mp.Process(target=worker, args=(x, tweets_per_process, tweets_subset,)))
 
         
 
-        results = run_processes(processes, parent_recv)
+        results = run_processes(processes, zmq_pullsocket1)
 
 
     display_results(results)
