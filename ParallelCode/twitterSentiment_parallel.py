@@ -152,13 +152,13 @@ def worker(core, tweet_limit, fetched_tweets, output, assign_core):
         #print("date: " + date)
         fetched_tweets = TwitterClient().get_tweets(query, tweet_limit, date)
         end = time.time()
-        print("fetching " + str(core) + ": " + str(end-start))
+        print("Fetching time " + str(core) + ": " + str(end-start))
     if len(fetched_tweets) > tweet_limit:
         fetched_tweets = fetched_tweets[:int(tweet_limit)]
     start = time.time()
     TwitterClient().parse_tweets(fetched_tweets, output)
     end = time.time()
-    print("processing " + str(core) + ": " + str(end-start))
+    print("Parsing time " + str(core) + ": " + str(end-start))
 
 # starts the processes and times them
 def run_processes(processes, parent_recv):
@@ -182,7 +182,7 @@ def run_processes(processes, parent_recv):
 
     #end time
     end = time.time()
-    print('total processing time: ' + str(end - start))
+    print('Total parallel processing time: ' + str(end - start))
 
     return results
 
@@ -242,7 +242,7 @@ def main(test, parallel_get_tweets, num_processes, max_tweets, use_saved, save_t
             # print("done fetching")
 
         fetch_end_timer = time.time()
-        print("Total fetching: " + str(fetch_end_timer - fetch_start_timer))
+        print("Total fetching time: " + str(fetch_end_timer - fetch_start_timer))
 
         #process the pre fetched tweets from saved or query
         if fetched_tweets:
@@ -255,7 +255,7 @@ def main(test, parallel_get_tweets, num_processes, max_tweets, use_saved, save_t
 
             # number of tweets per process
             tweets_per_process = len(fetched_tweets)/num_processes
-            print("tweets per process " + str(tweets_per_process))
+            print("Tweets per process " + str(tweets_per_process))
 
             # Setup a list of processes
             processes = []
@@ -281,7 +281,7 @@ def main(test, parallel_get_tweets, num_processes, max_tweets, use_saved, save_t
 
             # number of tweets per process
             tweets_per_process = max_tweets/num_processes
-            print("tweets per process " + str(tweets_per_process))
+            print("Tweets per process " + str(tweets_per_process))
 
             # Setup a list of processes
             processes = []
@@ -301,7 +301,7 @@ def main(test, parallel_get_tweets, num_processes, max_tweets, use_saved, save_t
 
     #end total application timer
     end_app_timer = time.time()
-    print('total time: ' + str(end_app_timer - start_app_timer))
+    print('Total time: ' + str(end_app_timer - start_app_timer))
 
     global respMain
     genRank = respMain
