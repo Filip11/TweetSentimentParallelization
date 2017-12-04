@@ -9,6 +9,7 @@ import os
 import pickle
 from datetime import datetime, timedelta
 import argparse
+import zmq
 
 app = Flask(__name__)
  
@@ -62,7 +63,7 @@ class TwitterClient(object):
     ###############################################################################################
     # parse_tweets can be the "worker" method for the processes
     ###############################################################################################
-    def parse_tweets(self, fetched_tweets, output):
+    def parse_tweets(self, fetched_tweets, output,test):
         # print("parse_tweets")
         tweets = []
         numPtweets = 0
@@ -84,12 +85,25 @@ class TwitterClient(object):
 
             tweets.append(parsed_tweet)
 
-        #return tweets, numPtweets, numNtweets
-        temp_results = []
-        temp_results.append({"tweets" : tweets})
-        temp_results.append({"numPtweets" : numPtweets})
-        temp_results.append({"numNtweets" : numNtweets})
-        output.send(temp_results)
+
+        if test == "zeromq":
+            context = zmq.Context()
+            zmq_pushsocket1 = context.socket(zmq.PUSH)
+            port = str(5557+core)
+            zmq_pushsocket1.connect("tcp://0.0.0.0:"+port)
+            zmq_pushsocket1.send_json({"tweets" : tweets})
+            zmq_pushsocket1.send_json({"numPtweets" : numPtweets})
+            zmq_pushsocket1.send_json({"numNtweets" : numNtweets})
+
+        else:
+            #return tweets, numPtweets, numNtweets
+            temp_results = []
+            temp_results.append({"tweets" : tweets})
+            temp_results.append({"numPtweets" : numPtweets})
+            temp_results.append({"numNtweets" : numNtweets})
+            output.send(temp_results)
+
+
         '''output.put({"tweets" : tweets})
         output.put({"numPtweets" : numPtweets})
         output.put({"numNtweets" : numNtweets})'''
@@ -156,7 +170,7 @@ def worker(core, tweet_limit, fetched_tweets, output, assign_core,test):
     if len(fetched_tweets) > tweet_limit:
         fetched_tweets = fetched_tweets[:int(tweet_limit)]
     start = time.time()
-    TwitterClient().parse_tweets(fetched_tweets, output)
+    TwitterClient().parse_tweets(fetched_tweets, output,test)
     end = time.time()
     print("processing " + str(core) + ": " + str(end-start))
 
@@ -309,7 +323,7 @@ def main(test, parallel_get_tweets, num_processes, max_tweets, use_saved, save_t
             processes = []
             for x in range(num_processes):
                 tweets_subset = []
-                processes.append(mp.Process(target=worker, args=(x, tweets_per_process, tweets_subset,test)))
+                processes.append(mp.Process(target=worker, args=(x, tweets_per_process, tweets_subset,None,None,test)))
 
 
 
