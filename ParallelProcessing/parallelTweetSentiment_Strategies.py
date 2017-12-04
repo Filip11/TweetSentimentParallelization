@@ -63,7 +63,7 @@ class TwitterClient(object):
     ###############################################################################################
     # parse_tweets can be the "worker" method for the processes
     ###############################################################################################
-    def parse_tweets(self, fetched_tweets, output,test):
+    def parse_tweets(self, fetched_tweets, output,test,core):
         # print("parse_tweets")
         tweets = []
         numPtweets = 0
@@ -170,7 +170,7 @@ def worker(core, tweet_limit, fetched_tweets, output, assign_core,test):
     if len(fetched_tweets) > tweet_limit:
         fetched_tweets = fetched_tweets[:int(tweet_limit)]
     start = time.time()
-    TwitterClient().parse_tweets(fetched_tweets, output,test)
+    TwitterClient().parse_tweets(fetched_tweets, output,test,core)
     end = time.time()
     print("processing " + str(core) + ": " + str(end-start))
 
@@ -185,9 +185,13 @@ def run_processes(processes, parent_recv,test):
     for p in processes:
         p.start()
 
-    # Get process results from output pipe
-    for i in range(len(processes)):
-        results.extend(parent_recv.recv())
+    if test == "zeromq":
+        for i in range(3):
+            results.append(parent_recv.recv_json())
+    else:
+        # Get process results from output pipe
+        for i in range(len(processes)):
+            results.extend(parent_recv.recv())
 
     # Exit the completed processes
     for p in processes:
