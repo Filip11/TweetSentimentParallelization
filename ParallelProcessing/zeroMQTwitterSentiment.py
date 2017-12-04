@@ -8,6 +8,7 @@ import time
 import os
 import pickle
 from datetime import datetime, timedelta
+import zmq
 
 app = Flask(__name__)
  
@@ -62,6 +63,20 @@ class TwitterClient(object):
     # parse_tweets can be the "worker" method for the processes
     ###############################################################################################
     def parse_tweets(self, fetched_tweets, output):
+        context = zmq.Context()
+
+        '''
+        zmq_pullsocket = context.socket(zmq.PULL)
+        zmq_pullsocket.bind("tcp://0.0.0.0:5557")
+        message = zmq_pullsocket.recv()
+        print(message)
+        '''
+
+        context = zmq.Context()
+        zmq_pushsocket1 = context.socket(zmq.PUSH)
+        zmq_pushsocket1.connect("tcp://0.0.0.0:5557")
+
+
         tweets = []
         numPtweets = 0
         numNtweets = 0
@@ -87,7 +102,11 @@ class TwitterClient(object):
         temp_results.append({"tweets" : tweets})
         temp_results.append({"numPtweets" : numPtweets})
         temp_results.append({"numNtweets" : numNtweets})
+
         output.send(temp_results)
+        zmq_pushsocket1.send_json({"tweets" : tweets})
+        zmq_pushsocket1.send_json({"numPtweets" : numPtweets})
+        zmq_pushsocket1.send_json({"numPtweets" : numPtweets})
         '''output.put({"tweets" : tweets})
         output.put({"numPtweets" : numPtweets})
         output.put({"numNtweets" : numNtweets})'''
@@ -138,6 +157,14 @@ def addline(aLine):
 def worker(core, tweet_limit, fetched_tweets, output):
     #set process to use specific core, does not work on Windows
     #os.sched_setaffinity(0, {core})
+    '''
+    context = zmq.Context()
+    zmq_pushsocket = context.socket(zmq.PUSH)
+    zmq_pushsocket.connect("tcp://0.0.0.0:5557")
+
+    zmq_pushsocket.send_string("MESSAGE")
+    '''
+
     if not fetched_tweets:
         fetched_tweets = []
     if len(fetched_tweets) <= 0:
@@ -157,7 +184,7 @@ def worker(core, tweet_limit, fetched_tweets, output):
     print("processing " + str(core) + ": " + str(end-start))
 
 # starts the processes and times them
-def run_processes(processes, parent_recv):
+def run_processes(processes, parent_recv,zmq_pullsocket1):
 
     results = []
     #start timer
@@ -175,7 +202,13 @@ def run_processes(processes, parent_recv):
     for p in processes:
         # print("joining")
         p.join()
-
+    message = zmq_pullsocket1.recv_json()
+    print(message)
+    message = zmq_pullsocket1.recv_json()
+    print(message)
+    message = zmq_pullsocket1.recv_json()
+    print(message)
+    print("got em")
     #end time
     end = time.time()
     print('total processing time: ' + str(end - start))
@@ -188,6 +221,7 @@ def display_results(results):
     numPtweets = 0
     numNtweets = 0
     #get number of positive and negative tweets
+
     for item in results:
         if "tweets" in item:
             tweets.extend(item["tweets"])
@@ -217,13 +251,13 @@ def main():
 
     results = []
     fetched_tweets = None
-    max_tweets = 1000
-    num_processes = 4
+    max_tweets = 100
+    num_processes = 1
     query = 'Engineer'
 
-    use_saved_tweets = False
+    use_saved_tweets = True
     save_tweets = False
-    parallel_get_tweets = True
+    parallel_get_tweets = False
     tweet_file = "tweets.txt"
 
     #start total application timer
@@ -254,8 +288,12 @@ def main():
             if len(fetched_tweets) > max_tweets:
                 fetched_tweets = fetched_tweets[:max_tweets-1]
 
-            # Define pipe to send data from parent and cild processes
+
             parent_recv, child_send = mp.Pipe()
+
+            context = zmq.Context()
+            zmq_pullsocket1 = context.socket(zmq.PULL)
+            zmq_pullsocket1.bind("tcp://0.0.0.0:5557")
 
             # number of tweets per process
             tweets_per_process = len(fetched_tweets)/num_processes
@@ -272,9 +310,11 @@ def main():
                     tweets_subset = fetched_tweets[lower_limit:]
                 else:
                     tweets_subset = fetched_tweets[lower_limit:upper_limit]
-                processes.append(mp.Process(target=worker, args=(x, tweets_per_process, tweets_subset, child_send)))
+                processes.append(mp.Process(target=worker, args=(x, tweets_per_process, tweets_subset, child_send,)))
 
-            results = run_processes(processes, parent_recv)
+
+            results = run_processes(processes, parent_recv,zmq_pullsocket1)
+
 
     # get tweets in parallel processes
     elif parallel_get_tweets:
@@ -291,7 +331,12 @@ def main():
             tweets_subset = []
             processes.append(mp.Process(target=worker, args=(x, tweets_per_process, tweets_subset, child_send)))
 
+        
+
         results = run_processes(processes, parent_recv)
+
+
+
 
     display_results(results)
 
