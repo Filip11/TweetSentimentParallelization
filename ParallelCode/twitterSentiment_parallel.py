@@ -2,12 +2,13 @@ import re
 import tweepy
 from tweepy import OAuthHandler
 from textblob import TextBlob
-from flask import Flask
+from flask import Flask, request
 import multiprocessing as mp
 import time
 import os
 import pickle
 from datetime import datetime, timedelta
+import argparse
 
 app = Flask(__name__)
  
@@ -137,9 +138,10 @@ def addline(aLine):
 ###########################################
 # worker method for processes to get/parse tweets
 ###########################################
-def worker(core, tweet_limit, fetched_tweets, output):
+def worker(core, tweet_limit, fetched_tweets, output, assign_core):
     #set process to use specific core, does not work on Windows
-    os.sched_setaffinity(0, {core})
+    if assign_core:
+        os.sched_setaffinity(0, {core})
     if not fetched_tweets:
         fetched_tweets = []
     if len(fetched_tweets) <= 0:
@@ -215,18 +217,10 @@ def display_results(results):
         addline(tweet['text'])
     addline("========================================================================")
 
-def main():
+def main(test, parallel_get_tweets, num_processes, max_tweets, use_saved, save_tweets, filename, query, assign_core):
 
     results = []
     fetched_tweets = None
-    max_tweets = 5000
-    num_processes = 4
-    query = 'Engineer'
-
-    use_saved_tweets = False
-    save_tweets = False
-    parallel_get_tweets = True
-    tweet_file = "tweets.txt"
 
     #start total application timer
     start_app_timer = time.time()
@@ -234,7 +228,7 @@ def main():
     # get all of the tweets before processing
     if not parallel_get_tweets:
         fetch_start_timer = time.time()
-        if use_saved_tweets:
+        if use_saved:
                 with open(tweet_file, 'rb') as f:
                     fetched_tweets = pickle.load(f)
         elif save_tweets: # fetch and save tweets to text file
@@ -274,26 +268,34 @@ def main():
                     tweets_subset = fetched_tweets[lower_limit:]
                 else:
                     tweets_subset = fetched_tweets[lower_limit:upper_limit]
-                processes.append(mp.Process(target=worker, args=(x, tweets_per_process, tweets_subset, child_send)))
+                processes.append(mp.Process(target=worker, args=(x, tweets_per_process, tweets_subset, child_send, assign_core)))
 
             results = run_processes(processes, parent_recv)
 
     # get tweets in parallel processes
     elif parallel_get_tweets:
-        # Define pipe to send data from parent and child processes
-        parent_recv, child_send = mp.Pipe()
 
-        # number of tweets per process
-        tweets_per_process = max_tweets/num_processes
-        print("tweets per process " + str(tweets_per_process))
+        if test == 'pipe':
+            # Define pipe to send data from parent and child processes
+            parent_recv, child_send = mp.Pipe()
 
-        # Setup a list of processes
-        processes = []
-        for x in range(num_processes):
-            tweets_subset = []
-            processes.append(mp.Process(target=worker, args=(x, tweets_per_process, tweets_subset, child_send)))
+            # number of tweets per process
+            tweets_per_process = max_tweets/num_processes
+            print("tweets per process " + str(tweets_per_process))
 
-        results = run_processes(processes, parent_recv)
+            # Setup a list of processes
+            processes = []
+            for x in range(num_processes):
+                tweets_subset = []
+                processes.append(mp.Process(target=worker, args=(x, tweets_per_process, tweets_subset, child_send, assign_core)))
+
+            results = run_processes(processes, parent_recv)
+
+        elif test == 'pool':
+            print('pool')
+        elif test == 'zeromq':
+            print('zeromq')
+
 
     display_results(results)
 
@@ -306,9 +308,43 @@ def main():
     respMain = ""
     return genRank
 
-@app.route('/')
+# convert string to boolean
+def strToBool(value):
+  return value.lower() in ("yes", "true", "t", "1")
+
+@app.route('/', methods=('get', 'post'))
 def hello_world():
-    return main()
+    #default test values
+    test = None
+    parallel = False
+    num_processes = 1
+    max_tweets = 5000
+    use_saved = False
+    save_tweets = False
+    filename = 'tweets.txt'
+    query = 'Engineer'
+    assign_core = False
+
+    if 'test' in request.args:
+        test = request.args.get('test')
+    if 'parallel' in request.args:
+        parallel = strToBool(request.args.get('parallel'))
+    if 'processes' in request.args:
+        num_processes = int(request.args.get('processes'))
+    if 'max_tweets' in request.args:
+        max_tweets = int(request.args.get('max_tweets'))
+    if 'use_saved' in request.args:
+        use_saved = strToBool(request.args.get('use_saved'))
+    if 'save_tweets' in request.args:
+        save_tweets = strToBool(request.args.get('save_tweets'))
+    if 'filename' in request.args:
+        filename = request.args.get('filename')
+    if 'query' in request.args:
+        query = request.args.get('query')
+    if 'assign_core' in request.args:
+        assign_core = strToBool(request.args.get('assign_core'))
+
+    return main(test,parallel,num_processes,max_tweets,use_saved,save_tweets, filename, query, assign_core)
 
 if __name__ == "__main__":
     # calling main function
