@@ -166,13 +166,13 @@ def worker(core, tweet_limit, fetched_tweets, output, assign_core,test):
         #print("date: " + date)
         fetched_tweets = TwitterClient().get_tweets(query, tweet_limit, date)
         end = time.time()
-        print("fetching " + str(core) + ": " + str(end-start))
+        print("Fetching time " + str(core) + ": " + str(end-start))
     if len(fetched_tweets) > tweet_limit:
         fetched_tweets = fetched_tweets[:int(tweet_limit)]
     start = time.time()
     TwitterClient().parse_tweets(fetched_tweets, output,test,core)
     end = time.time()
-    print("processing " + str(core) + ": " + str(end-start))
+    print("Parsing time " + str(core) + ": " + str(end-start))
 
 # starts the processes and times them
 def run_processes(processes, parent_recv,test):
@@ -180,14 +180,6 @@ def run_processes(processes, parent_recv,test):
     results = []
     #start timer
     start = time.time()
-    '''
-    if test == "pool":
-        pool = mp.Pool(processes =processes)
-        for x in range(processes):
-            pool.apply_async(worker,args=(x,parent_recv,[],None,None,test)) 
-
-        pool.close()
-    '''
 
     # Run processes
     for p in processes:
@@ -209,13 +201,12 @@ def run_processes(processes, parent_recv,test):
 
     #end time
     end = time.time()
-    print('total processing time: ' + str(end - start))
+    print('Total parallel processing time: ' + str(end - start))
 
     return results
 
 # start pool processing
 def run_pool(processes,tweets_per_process,assign_core):
-    print("testing pool")
     results = []
 
     start = time.time()
@@ -232,7 +223,7 @@ def run_pool(processes,tweets_per_process,assign_core):
     pool.close()
 
     end = time.time()
-    print('total processing time: ' + str(end - start))
+    print('Total parallel processing time: ' + str(end - start))
 
     return results
 
@@ -268,7 +259,7 @@ def display_results(results):
     addline("========================================================================")
 
 def main(test, parallel_get_tweets, num_processes, max_tweets, use_saved, save_tweets, filename, query, assign_core):
-
+    print("Starting Test:", test)
     results = []
     fetched_tweets = None
 
@@ -292,7 +283,7 @@ def main(test, parallel_get_tweets, num_processes, max_tweets, use_saved, save_t
             # print("done fetching")
 
         fetch_end_timer = time.time()
-        print("Total fetching: " + str(fetch_end_timer - fetch_start_timer))
+        print("Total fetching time: " + str(fetch_end_timer - fetch_start_timer))
 
         #process the pre fetched tweets from saved or query
         if fetched_tweets:
@@ -305,7 +296,7 @@ def main(test, parallel_get_tweets, num_processes, max_tweets, use_saved, save_t
 
             # number of tweets per process
             tweets_per_process = len(fetched_tweets)/num_processes
-            print("tweets per process " + str(tweets_per_process))
+            print("Tweets per process " + str(tweets_per_process))
 
             # Setup a list of processes
             processes = []
@@ -331,7 +322,7 @@ def main(test, parallel_get_tweets, num_processes, max_tweets, use_saved, save_t
 
             # number of tweets per process
             tweets_per_process = max_tweets/num_processes
-            print("tweets per process " + str(tweets_per_process))
+            print("Tweets per process " + str(tweets_per_process))
 
             # Setup a list of processes
             processes = []
@@ -345,7 +336,7 @@ def main(test, parallel_get_tweets, num_processes, max_tweets, use_saved, save_t
 
             # number of tweets per process
             tweets_per_process = max_tweets/num_processes
-            print("tweets per process " + str(tweets_per_process))
+            print("Tweets per process " + str(tweets_per_process))
 
             results = run_pool(num_processes, tweets_per_process,assign_core)
 
@@ -360,7 +351,7 @@ def main(test, parallel_get_tweets, num_processes, max_tweets, use_saved, save_t
 
             # number of tweets per process
             tweets_per_process = max_tweets/num_processes
-            print("tweets per process " + str(tweets_per_process))
+            print("Tweets per process " + str(tweets_per_process))
 
             # Setup a list of processes
             processes = []
@@ -391,7 +382,7 @@ def strToBool(value):
 @app.route('/', methods=('get', 'post'))
 def hello_world():
     #default test values
-    test = None
+    test = "pipe"
     parallel = False
     num_processes = 1
     max_tweets = 5000
