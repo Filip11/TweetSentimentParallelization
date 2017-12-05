@@ -188,24 +188,24 @@ def run_processes(processes, parent_recv,test):
 
         pool.close()
     '''
+
+    # Run processes
+    for p in processes:
+        p.start()
+
+    if test == "zeromq":
+        for i in range(3):
+            results.append(parent_recv.recv_json())
+
     else:
-        # Run processes
-        for p in processes:
-            p.start()
+        # Get process results from output pipe
+        for i in range(len(processes)):
+            results.extend(parent_recv.recv())
 
-        if test == "zeromq":
-            for i in range(3):
-                results.append(parent_recv.recv_json())
-
-        else:
-            # Get process results from output pipe
-            for i in range(len(processes)):
-                results.extend(parent_recv.recv())
-
-        # Exit the completed processes
-        for p in processes:
-            # print("joining")
-            p.join()
+    # Exit the completed processes
+    for p in processes:
+        # print("joining")
+        p.join()
 
     #end time
     end = time.time()
@@ -215,6 +215,7 @@ def run_processes(processes, parent_recv,test):
 
 # start pool processing
 def run_pool(processes,tweets_per_process,assign_core):
+    print("testing pool")
     results = []
 
     start = time.time()
