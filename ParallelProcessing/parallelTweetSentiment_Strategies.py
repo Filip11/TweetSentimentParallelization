@@ -180,25 +180,56 @@ def run_processes(processes, parent_recv,test):
     results = []
     #start timer
     start = time.time()
+    '''
+    if test == "pool":
+        pool = mp.Pool(processes =processes)
+        for x in range(processes):
+            pool.apply_async(worker,args=(x,parent_recv,[],None,None,test)) 
 
-    # Run processes
-    for p in processes:
-        p.start()
-
-    if test == "zeromq":
-        for i in range(3):
-            results.append(parent_recv.recv_json())
+        pool.close()
+    '''
     else:
-        # Get process results from output pipe
-        for i in range(len(processes)):
-            results.extend(parent_recv.recv())
+        # Run processes
+        for p in processes:
+            p.start()
 
-    # Exit the completed processes
-    for p in processes:
-        # print("joining")
-        p.join()
+        if test == "zeromq":
+            for i in range(3):
+                results.append(parent_recv.recv_json())
+
+        else:
+            # Get process results from output pipe
+            for i in range(len(processes)):
+                results.extend(parent_recv.recv())
+
+        # Exit the completed processes
+        for p in processes:
+            # print("joining")
+            p.join()
 
     #end time
+    end = time.time()
+    print('total processing time: ' + str(end - start))
+
+    return results
+
+# start pool processing
+def run_pool(processes,tweets_per_process,assign_core):
+    results = []
+
+    start = time.time()
+    # Define pipe to send data from parent and child processes
+    parent_recv, child_send = mp.Pipe()
+
+
+    pool = mp.Pool(processes =processes)
+    for x in range(processes):
+        pool.apply_async(worker,args=(x,tweets_per_process,[],child_send,assign_core,"pool")) 
+    for i in range(processes):
+        results.extend(parent_recv.recv())
+    
+    pool.close()
+
     end = time.time()
     print('total processing time: ' + str(end - start))
 
@@ -310,7 +341,14 @@ def main(test, parallel_get_tweets, num_processes, max_tweets, use_saved, save_t
             results = run_processes(processes, parent_recv,test)
 
         elif test == 'pool':
-            print('pool')
+
+            # number of tweets per process
+            tweets_per_process = max_tweets/num_processes
+            print("tweets per process " + str(tweets_per_process))
+
+            results = run_pool(num_processes, tweets_per_process,assign_core)
+
+
         elif test == 'zeromq':
             context = zmq.Context()
             zmq_pullsocket1 = context.socket(zmq.PULL)
@@ -327,7 +365,7 @@ def main(test, parallel_get_tweets, num_processes, max_tweets, use_saved, save_t
             processes = []
             for x in range(num_processes):
                 tweets_subset = []
-                processes.append(mp.Process(target=worker, args=(x, tweets_per_process, tweets_subset,None,None,test)))
+                processes.append(mp.Process(target=worker, args=(x, tweets_per_process, tweets_subset,None,assign_core,test)))
 
 
 
