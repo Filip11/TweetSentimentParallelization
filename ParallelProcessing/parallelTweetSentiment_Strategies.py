@@ -118,7 +118,7 @@ class TwitterClient(object):
             last_id = -1
             while len(fetched_tweets) < max_tweets:
                 # call twitter api to fetch tweets
-                new_tweets = self.api.search(q=query, count=count, max_id=str(last_id), until=date)
+                new_tweets = self.api.search(q=query, count=count, since_id=str(last_id), until=date)
                 #time.sleep(1)
                 if not new_tweets:
                     break
