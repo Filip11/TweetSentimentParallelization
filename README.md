@@ -4,11 +4,11 @@ Multiple python multiprocessing library techniques were experimented with, inclu
 
 Environment used was DigitalOcean quad-core high-CPU VM.
 
-** Instruction **
+# Instruction 
 
 Tests can be run by running the run_tweets_test.sh bash script in /ParallelProcessing.
 
-** Results **
+# Results 
 
 Average Fetch Time of 500 Tweets:
 
